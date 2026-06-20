@@ -1,0 +1,15 @@
+services:
+  nav-bt:
+    build: .
+    container_name: nav-bt-stack
+    stdin_open: true
+    tty: true
+    network_mode: host
+    ipc: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - TURTLEBOT3_MODEL=burger
+      - ROS_DOMAIN_ID=0
+    volumes:
+      - ./ros2_ws/src:/ros2_ws/src
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw

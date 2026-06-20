@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!-- Test FEATURE 2 alone:  ros2 run nav_bt_stack bt_main --ros-args -p tree_id:=RoomScanDemo
+     Robot scans living_room for "person" until the fake perception reports it. -->
+<root main_tree_to_execute="RoomScanDemo">
+  <BehaviorTree ID="RoomScanDemo">
+    <SubTree ID="RoomScan" scan_room="living_room" scan_target="person"
+             target_pose="{found}"/>
+  </BehaviorTree>
+</root>

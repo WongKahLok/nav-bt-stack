@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- Test the door feature alone:
+       ros2 run nav_bt_stack bt_main --ros-args -p tree_id:=DoorCrossingDemo
+     Needs Nav2 (NavToPose hits /navigate_to_pose) + a live /scan + the local
+     costmap (/local_costmap/costmap). The robot drives to (1.0, 0.0) facing +x,
+     waits for the door ahead to open, crosses to (2.0, 0.0), then VoxelCheck
+     confirms the footprint is clear. Set the coords to your map's doorway. -->
+<root main_tree_to_execute="DoorCrossingDemo">
+  <BehaviorTree ID="DoorCrossingDemo">
+    <SubTree ID="DoorApproachAndCross"
+             ax="1.0" ay="0.0" ayaw="0.0"
+             tx="2.0" ty="0.0" tyaw="0.0"
+             gap="1.5"/>
+  </BehaviorTree>
+</root>

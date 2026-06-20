@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!-- ===================================================================== -->
+<!-- DOOR_APPROACH_AND_CROSS  (subtree 1d)                                    -->
+<!--                                                                         -->
+<!-- behaviour_tree_structure.md 1d / navigation_pipeline.md 2.3:            -->
+<!--   NAV_TO_POSE(approach, ~1.0 m standoff facing the door)               -->
+<!--     -> WaitForDoorOpen   (LiDAR forward cone goes clear)               -->
+<!--     -> NAV_TO_POSE(through, ~0.5 m past the threshold)                 -->
+<!--     -> VoxelCheck        (footprint clear after crossing)              -->
+<!--                                                                         -->
+<!-- RetryUntilSuccessful wraps the whole thing = the recovery layer "one     -->
+<!-- level up" the docs call for. On any failure (door-open timeout or a      -->
+<!-- fouled footprint from VoxelCheck) the inner Fallback runs BackUp, then   -->
+<!-- ForceFailure makes the attempt fail so the retry re-approaches from the  -->
+<!-- reversed pose. navigation_pipeline.md 4: "Door blocked -> wait/re-check" -->
+<!-- and the §4 escape "back up 0.3 m -> retry".                              -->
+<!--                                                                         -->
+<!-- Caller remaps the door geometry via ports (scalars, map frame):         -->
+<!--   ax/ay/ayaw : approach pose      tx/ty/tyaw : through pose             -->
+<!--   gap        : open-range threshold [m]                                 -->
+<!-- ===================================================================== -->
+<root main_tree_to_execute="DoorApproachAndCross">
+  <BehaviorTree ID="DoorApproachAndCross">
+    <RetryUntilSuccessful num_attempts="3">
+      <Fallback name="cross_with_recovery">
+        <Sequence name="door_cross">
+          <NavToPose name="to_door_standoff"
+                     x="{ax}" y="{ay}" yaw="{ayaw}" frame_id="map"/>
+          <WaitForDoorOpen gap_threshold="{gap}" timeout_s="30.0"/>
+          <NavToPose name="cross_threshold"
+                     x="{tx}" y="{ty}" yaw="{tyaw}" frame_id="map"/>
+          <VoxelCheck lethal_threshold="254" footprint_radius="0.30"/>
+        </Sequence>
+        <!-- recovery: reverse out of the doorway, then fail so the retry runs -->
+        <ForceFailure>
+          <BackUp distance="0.30" speed="0.15" time_allowance="10.0"/>
+        </ForceFailure>
+      </Fallback>
+    </RetryUntilSuccessful>
+  </BehaviorTree>
+</root>

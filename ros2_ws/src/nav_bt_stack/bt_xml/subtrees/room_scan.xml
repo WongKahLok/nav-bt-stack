@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- FEATURE 2: ROOM_SCAN
+     Generate coverage viewpoints in a room, drive to each, and check perception
+     at every stop. ForEachPose mode="find" stops the moment the target is seen.
+
+     Ports (remapped by the caller):
+       in  scan_room    : room name to search
+       in  scan_target  : label to look for
+       out target_pose  : pose of the target when found
+-->
+<root main_tree_to_execute="RoomScan">
+  <BehaviorTree ID="RoomScan">
+    <Sequence>
+      <GetViewpoints room="{scan_room}" num_viewpoints="6" viewpoints="{viewpoints}"/>
+      <ForEachPose poses="{viewpoints}" mode="find"
+                   current_pose="{vp}" current_index="{vp_idx}">
+        <Sequence>
+          <NavToPose goal_pose="{vp}"/>
+          <CheckTargetFound target="{scan_target}" found_pose="{target_pose}"/>
+        </Sequence>
+      </ForEachPose>
+    </Sequence>
+  </BehaviorTree>
+</root>

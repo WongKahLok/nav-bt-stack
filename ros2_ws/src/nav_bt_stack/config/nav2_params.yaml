@@ -1,0 +1,308 @@
+# =============================================================================
+# Nav2 parameters for nav_bt_stack  (ROS 2 Humble)
+#
+# Planner  : SmacPlannerHybrid          -> registered as planner_id  "GridBased"
+# Controller: RotationShim wrapping DWB  -> registered as controller_id "FollowPath"
+#
+# The default bt_navigator BT calls ComputePathToPose(planner_id="GridBased")
+# and FollowPath(controller_id="FollowPath"), so these plugin names are what
+# tie your BT's /navigate_to_pose calls (and InterleavedPlanner's
+# compute_path_to_pose scoring, planner_id="GridBased") to these plugins.
+# No change to the task tree is needed -- selection happens here, in params.
+#
+# Values mirror navigation_pipeline.md §6. Tune footprint / vel limits to the
+# real omni chassis. Use from a launch file with:  params_file:=<this file>
+# =============================================================================
+
+amcl:
+  ros__parameters:
+    use_sim_time: true
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    global_frame_id: "map"
+    scan_topic: "scan"
+    robot_model_type: "nav2_amcl::OmniMotionModel"   # omni base
+    min_particles: 500
+    max_particles: 2000
+    laser_max_range: 12.0          # RPLIDAR S3 spec
+    laser_min_range: -1.0
+    max_beams: 60
+    update_min_d: 0.25
+    update_min_a: 0.2
+    resample_interval: 1
+    transform_tolerance: 1.0
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: true
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    # default_nav_to_pose_bt_xml / default_nav_through_poses_bt_xml are left at
+    # the nav2_bt_navigator package defaults, which already select
+    # planner_id="GridBased" and controller_id="FollowPath".
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_compute_path_through_poses_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_back_up_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_clear_costmap_service_bt_node
+      - nav2_is_stuck_condition_bt_node
+      - nav2_goal_reached_condition_bt_node
+      - nav2_goal_updated_condition_bt_node
+      - nav2_recovery_node_bt_node
+      - nav2_pipeline_sequence_bt_node
+      - nav2_round_robin_node_bt_node
+      - nav2_rate_controller_bt_node
+
+# -----------------------------------------------------------------------------
+# Controller: Rotation Shim -> DWB  (the "DWB Controller + Shim" box)
+# -----------------------------------------------------------------------------
+controller_server:
+  ros__parameters:
+    use_sim_time: true
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    controller_plugins: ["FollowPath"]
+
+    progress_checker_plugin: "progress_checker"
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
+    goal_checker_plugins: ["general_goal_checker"]
+    general_goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.25
+      stateful: true
+
+    FollowPath:
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "dwb_core::DWBLocalPlanner"
+      angular_dist_threshold: 0.785      # rotate-in-place until within ~45 deg of path
+      forward_sampling_distance: 0.5
+      rotate_to_heading_angular_vel: 1.0
+      max_angular_accel: 3.2
+      simulate_ahead_time: 1.0
+
+      # --- DWB (the primary controller the shim hands off to) ---
+      debug_trajectory_details: true
+      min_vel_x: -0.30                   # omni
+      min_vel_y: -0.30                   # omni
+      max_vel_x: 0.50
+      max_vel_y: 0.50
+      max_vel_theta: 1.0
+      min_speed_xy: 0.0
+      max_speed_xy: 0.50
+      min_speed_theta: 0.0
+      acc_lim_x: 2.5
+      acc_lim_y: 2.5
+      acc_lim_theta: 3.2
+      decel_lim_x: -2.5
+      decel_lim_y: -2.5
+      decel_lim_theta: -3.2
+      vx_samples: 20
+      vy_samples: 10
+      vtheta_samples: 20
+      sim_time: 1.7
+      transform_tolerance: 0.2
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign",
+                "PathAlign", "PathDist", "GoalDist"]
+      BaseObstacle.scale: 0.02
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.1
+      GoalAlign.scale: 24.0
+      GoalAlign.forward_point_distance: 0.1
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+
+# -----------------------------------------------------------------------------
+# Local costmap  (3 m window, obstacle + voxel + inflation)
+# -----------------------------------------------------------------------------
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: true
+      global_frame: odom
+      robot_base_frame: base_link
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      rolling_window: true
+      width: 3.0
+      height: 3.0
+      resolution: 0.05
+      robot_radius: 0.30               # < 0.915 m doorway; tune to chassis
+      plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 12.0
+          obstacle_max_range: 10.0
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: true
+        publish_voxel_map: true
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /camera/depth/points
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.05
+          clearing: true
+          marking: true
+          data_type: "PointCloud2"
+          raytrace_max_range: 6.0
+          obstacle_max_range: 4.0
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.35
+      always_send_full_costmap: true
+
+# -----------------------------------------------------------------------------
+# Global costmap  (static map + obstacle + inflation)
+# -----------------------------------------------------------------------------
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: true
+      global_frame: map
+      robot_base_frame: base_link
+      update_frequency: 1.0
+      publish_frequency: 0.5
+      resolution: 0.05
+      track_unknown_space: true
+      robot_radius: 0.30
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 12.0
+          obstacle_max_range: 10.0
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.35
+      always_send_full_costmap: true
+
+map_server:
+  ros__parameters:
+    use_sim_time: true
+    yaml_filename: ""          # set from launch:  map:=<map>.yaml
+
+# -----------------------------------------------------------------------------
+# Planner: SmacPlannerHybrid  (the "A* / SmacPlannerHybrid" box) = "GridBased"
+# -----------------------------------------------------------------------------
+planner_server:
+  ros__parameters:
+    use_sim_time: true
+    expected_planner_frequency: 1.0
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_smac_planner::SmacPlannerHybrid"
+      tolerance: 0.25
+      allow_unknown: true
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 5.0
+      motion_model_for_search: "DUBIN"
+      angle_quantization_bins: 72
+      minimum_turning_radius: 0.0        # omni -> 0
+      reverse_penalty: 2.0
+      change_penalty: 0.0
+      non_straight_penalty: 1.2
+      cost_penalty: 2.0
+      retrospective_penalty: 0.015
+      analytic_expansion_ratio: 3.5
+      smooth_path: true
+      use_reeds_shepp: false
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: true
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: true
+
+# -----------------------------------------------------------------------------
+# Behavior server  (provides /backup, /spin, /wait recovery actions that the
+# BackUp / ROTATE_IN_PLACE wrapper leaves call)
+# -----------------------------------------------------------------------------
+behavior_server:
+  ros__parameters:
+    use_sim_time: true
+    local_costmap_topic: local_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_costmap_topic: global_costmap/costmap_raw
+    global_footprint_topic: global_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
+    spin:
+      plugin: "nav2_behaviors::Spin"
+    backup:
+      plugin: "nav2_behaviors::BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors::DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors::Wait"
+    local_frame: odom
+    global_frame: map
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 3.2
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: true
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.50, 0.50, 1.0]
+    min_velocity: [-0.30, -0.30, -1.0]
+    max_accel: [2.5, 2.5, 3.2]
+    max_decel: [-2.5, -2.5, -3.2]
+    odom_topic: "odom"
+    odom_duration: 0.1

@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<!-- ===================================================================== -->
+<!-- GPSR TASK TREE  -- integrates FEATURE 1 (InterleavedPlanner) and        -->
+<!-- FEATURE 2 (ROOM_SCAN).                                                  -->
+<!--                                                                         -->
+<!-- Mirrors navigation_pipeline.md 3.3 and behaviour_tree_structure.md 2c:  -->
+<!--   NAV_TO_POSE(instruction_point)                                        -->
+<!--     -> RECEIVE + PARSE commands                                         -->
+<!--     -> INTERLEAVED PLANNER (min-cost order of the 3 goals)              -->
+<!--     -> FOR EACH command:                                                -->
+<!--          known location? NAV_TO_POSE  : else ROOM_SCAN(room)            -->
+<!--          person? APPROACH_PERSON  /  object? PRECISE_PLACEMENT          -->
+<!--     -> NAV_TO_POSE(instruction_point)                                   -->
+<!--                                                                         -->
+<!-- REAL   : InterleavedPlanner, ROOM_SCAN subtree, NavToPose, branching.   -->
+<!-- FAKED  : MockGpsrCommands = [HRI] receive+parse. GetViewpoints /        -->
+<!--          CheckTargetFound self-fake (hard-coded rooms table /           -->
+<!--          fake_targets param). Swap each for the real producer later;    -->
+<!--          the tree wiring does not change.                               -->
+<!-- STUBBED: DOOR_APPROACH_AND_CROSS, APPROACH_PERSON,                       -->
+<!--          PRECISE_PLACEMENT_APPROACH, [Manip] -> AlwaysSuccess. These    -->
+<!--          belong to other subtrees/teams and are out of scope here.      -->
+<!--                                                                         -->
+<!-- Run:  ros2 run nav_bt_stack bt_main          (tree_id defaults to GpsrTask)-->
+<!-- Needs: Nav2 + a localisation TF (map->base_link), because NavToPose and -->
+<!--        the planner's path-cost queries hit live Nav2.                   -->
+<!-- ===================================================================== -->
+<root main_tree_to_execute="GpsrTask">
+  <BehaviorTree ID="GpsrTask">
+    <Sequence name="gpsr_root">
+
+      <!-- [C] DOOR_APPROACH_AND_CROSS (entrance) -- other subtree; stubbed. -->
+      <AlwaysSuccess name="DOOR_APPROACH_AND_CROSS__stub"/>
+
+      <!-- enter the arena, drive to the instruction point -->
+      <NavToPose name="to_instruction_point" x="0.0" y="0.0" yaw="0.0" frame_id="map"/>
+
+      <!-- [HRI] receive + parse the (up to 3) commands  -- FAKED.
+           Produces parallel arrays indexed by ORIGINAL command number. -->
+      <MockGpsrCommands goals="{goals}" kinds="{kinds}" targets="{targets}"
+                        rooms="{rooms}" located="{located}"/>
+
+      <!-- FEATURE 1: score all 3! orderings by Nav2 path cost, emit cheapest.
+           ordered_indices maps execution slot -> original command number, so
+           the per-command lookups below still hit the right array entry. -->
+      <InterleavedPlanner goals="{goals}"
+                          planner_id="GridBased"
+                          ordered_goals="{ordered_goals}"
+                          ordered_indices="{ordered_indices}"
+                          naive_cost="{naive_cost}"
+                          best_cost="{best_cost}"
+                          time_saving="{time_saving}"/>
+
+      <!-- execute each command in optimised order. mode="visit_all": a command
+           that fails (e.g. ROOM_SCAN exhausted) does NOT abort the rest --
+           navigation_pipeline.md 4: "skip subtask, continue next command". -->
+      <ForEachPose poses="{ordered_goals}" indices="{ordered_indices}"
+                   mode="visit_all"
+                   current_pose="{cmd_pose}" current_index="{cmd_idx}">
+        <Sequence name="one_command">
+
+          <!-- ---- reach the target ---- -->
+          <Fallback name="reach_target">
+            <!-- known location: go straight there -->
+            <Sequence name="known_location">
+              <CommandLocated located="{located}" index="{cmd_idx}"/>
+              <NavToPose goal_pose="{cmd_pose}"/>
+            </Sequence>
+            <!-- unknown location: FEATURE 2 ROOM_SCAN, then go to the hit -->
+            <Sequence name="unknown_location">
+              <CommandField array="{rooms}"   index="{cmd_idx}" value="{cmd_room}"/>
+              <CommandField array="{targets}" index="{cmd_idx}" value="{cmd_target}"/>
+              <SubTree ID="RoomScan" scan_room="{cmd_room}" scan_target="{cmd_target}"
+                       target_pose="{found_pose}"/>
+              <NavToPose goal_pose="{found_pose}"/>
+            </Sequence>
+          </Fallback>
+
+          <!-- ---- act at the target ---- -->
+          <Fallback name="act_at_target">
+            <Sequence name="if_person">
+              <CommandKindIs kinds="{kinds}" index="{cmd_idx}" is="person"/>
+              <!-- [C] APPROACH_PERSON subtree + [HRI] dialogue -- stubbed -->
+              <AlwaysSuccess name="APPROACH_PERSON__stub"/>
+            </Sequence>
+            <Sequence name="if_object">
+              <CommandKindIs kinds="{kinds}" index="{cmd_idx}" is="object"/>
+              <!-- [C] PRECISE_PLACEMENT_APPROACH + [Manip] pick/place -- stubbed -->
+              <AlwaysSuccess name="PRECISE_PLACEMENT_APPROACH__stub"/>
+            </Sequence>
+            <!-- kind == location: arriving is the whole task, nothing to do -->
+            <AlwaysSuccess name="location_only_noop"/>
+          </Fallback>
+
+        </Sequence>
+      </ForEachPose>
+
+      <!-- back to the instruction point to await the next round -->
+      <NavToPose name="return_to_instruction_point" x="0.0" y="0.0" yaw="0.0" frame_id="map"/>
+
+    </Sequence>
+  </BehaviorTree>
+</root>

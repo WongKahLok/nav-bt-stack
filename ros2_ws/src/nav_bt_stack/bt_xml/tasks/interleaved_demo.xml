@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!-- ===================================================================== -->
+<!-- FEATURE 1 in isolation -- InterleavedPlanner only.                      -->
+<!--                                                                         -->
+<!-- use_planner="false" -> straight-line cost, so NO Nav2 planner is needed.-->
+<!-- Nothing is driven; the node just logs the chosen order + naive/best     -->
+<!-- cost + whether it is time-saving. Good for checking the ordering logic. -->
+<!--                                                                         -->
+<!-- It still needs ONE transform -- map->base_link -- for the robot start   -->
+<!-- pose. If you have no localisation running, publish a static one first:  -->
+<!--   ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map base_link -->
+<!--                                                                         -->
+<!-- Run:  ros2 run nav_bt_stack bt_main --ros-args -p tree_id:=InterleavedDemo-->
+<!--                                                                         -->
+<!-- To score with the REAL Nav2 global planner instead, bring up Nav2 and   -->
+<!-- set use_planner="true" (the default).                                   -->
+<!-- ===================================================================== -->
+<root main_tree_to_execute="InterleavedDemo">
+  <BehaviorTree ID="InterleavedDemo">
+    <Sequence>
+      <MockGpsrCommands goals="{goals}" kinds="{kinds}" targets="{targets}"
+                        rooms="{rooms}" located="{located}"/>
+      <InterleavedPlanner goals="{goals}" use_planner="false"
+                          ordered_goals="{ordered_goals}"
+                          ordered_indices="{ordered_indices}"
+                          naive_cost="{naive_cost}"
+                          best_cost="{best_cost}"
+                          time_saving="{time_saving}"/>
+    </Sequence>
+  </BehaviorTree>
+</root>
