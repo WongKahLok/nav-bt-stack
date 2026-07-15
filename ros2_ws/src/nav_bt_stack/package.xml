@@ -21,6 +21,21 @@
   <depend>tf2_geometry_msgs</depend>
   <depend>ament_index_cpp</depend>
 
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <!-- Part 6: PointCloud2 (/livox/lidar) -> LaserScan (/scan) for AMCL/costmaps -->
+  <exec_depend>pointcloud_to_laserscan</exec_depend>
+
+  <!-- Part 7: hdas_msg/Imu -> sensor_msgs/Imu translator + robot_localization EKF -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>hdas_msg</exec_depend>
+  <exec_depend>robot_localization</exec_depend>
+
+  <!-- slam_launch.py: build a map with slam_toolbox while driving via teleop -->
+  <exec_depend>slam_toolbox</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

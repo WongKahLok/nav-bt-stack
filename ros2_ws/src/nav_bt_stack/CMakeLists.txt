@@ -49,10 +49,17 @@ install(DIRECTORY bt_xml
 
 install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME})
- 
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME})
+
 install(DIRECTORY include/
   DESTINATION include)
- 
+
+install(PROGRAMS
+  scripts/imu_hdas_translator.py
+  DESTINATION lib/${PROJECT_NAME})
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

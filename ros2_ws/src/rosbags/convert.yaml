@@ -1,0 +1,5 @@
+output_bags:
+  - uri: ros2_output
+    storage_id: mcap
+    storage_config_uri: my_storage_config.yaml
+    all: true

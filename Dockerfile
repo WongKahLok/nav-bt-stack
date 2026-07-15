@@ -14,6 +14,10 @@ RUN apt-get update && apt-get install -y \
     ros-humble-rviz2 \
     ros-humble-teleop-twist-keyboard \
     ros-humble-foxglove-bridge \
+    ros-humble-pointcloud-to-laserscan \
+    ros-humble-robot-localization \
+    ros-humble-tf2-tools \ 
+    ros-humble-rqt-tf-tree \
     build-essential \
     cmake \
     wget \
